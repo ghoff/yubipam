@@ -1,0 +1,22 @@
+2008-09-03 - YubiPAM 1.0.1
+  [*] Improvements
+      * ykpasswd. Added additional flags to ease administration of inserting
+        to the database. The minimal flags now require adding a valid OTP and
+        it's corresponding AES key.
+
+
+2008-08-03 - YubiPAM 1.0
+  [*] Initial Release
+      * Manual add/delete from database. Using the ykpasswd tool you can add 
+	    delete yubikey entries from the database (default: /etc/yubikey).
+
+      * Per user accounting. Supports indiviudal user account authorisation.
+	    This is currently limited to one Yubikey dongle per user account.
+
+	  * Single factor sign in. Currently only single factor (ie. Yubikey OTP)
+	    is currently supported. There will be an additional second factor
+		password option added in the near future.
+		
+	  * Static heuristic support. Heuristic support for OTP data deltas is hard
+	    coded. This will be changable in the next release.
+	  
