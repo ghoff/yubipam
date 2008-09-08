@@ -1,3 +1,14 @@
+2008-09-08 - YubiPAM 1.0.2
+  [*] Improvements
+      * PAM. Fixed an issue when stacking YubiPAM with other modules. When
+        YubiPAM was stacked after another module it would retrieve the 
+        authentication token from the preceding module and assume that as the
+        OTP when clearly it wasn't. - thanks Brian Gorka
+
+      * Documentation. Added clearer documentation on building and debugging
+        the YubiPAM code.
+
+
 2008-09-03 - YubiPAM 1.0.1
   [*] Improvements
       * ykpasswd. Added additional flags to ease administration of inserting

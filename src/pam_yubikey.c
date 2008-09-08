@@ -1,7 +1,8 @@
 /*
 * YubiKey PAM Module
 *
-* Copyright (C) 2008 Ian Firns firnsy@securixlive.com
+* Copyright (C) 2008 Ian Firns      <firnsy@securixlive.com>
+* Copyright (C) 2008 SecurixLive    <dev@securixlive.com>
 *
 * This program is free software; you can redistribute it and/or modify
 * it under the terms of the GNU General Public License as published by
@@ -92,28 +93,22 @@ pam_sm_authenticate (pam_handle_t * pamh,
 	int					delta_use;
 	int					delta_session;
 
+	int min_pub_uid_len = 1;
 	int nargs = 1;
-	int debug = 0;
 	int silent_otp = 0;
 
 	for (i = 0; i < argc; i++)
 	{
-	    if (strncmp(argv[i], "debug", 5) == 0)
-			debug = 1;
-		else if (strncmp(argv[i], "silent", 6) == 0)
+		if (strncmp(argv[i], "silent", 6) == 0)
 			silent_otp = 1;
 	}
 
 #ifdef DEBUG
-	if (debug)
-	{
-		D (("called."));
-		D (("flags %d argc %d", flags, argc));
-		for (i = 0; i < argc; i++)
-			D (("argv[%d]=%s", i, argv[i]));
-		D (("debug=%d", debug));
-		D (("silent=%d", silent_otp));
-    }
+	D (("called."));
+	D (("flags %d argc %d", flags, argc));
+	for (i = 0; i < argc; i++)
+		D (("argv[%d]=%s", i, argv[i]));
+	D (("silent=%d", silent_otp));
 #endif
 
 	/* obtain the user requesting authentication */
@@ -121,88 +116,68 @@ pam_sm_authenticate (pam_handle_t * pamh,
 	if (retval != PAM_SUCCESS)
     {
 #ifdef DEBUG
-		if (debug)
-			D (("get user returned error: %s", pam_strerror (pamh, retval)));
+		D (("get user returned error: %s", pam_strerror (pamh, retval)));
 #endif
-		goto done;
+		return retval;
     }
 	
 #ifdef DEBUG
-	if (debug)
-		D (("get user returned: %s", user));
+	D (("get user returned: %s", user));
 #endif
+
+	/* prompt for the Yubikey OTP */
+	retval = pam_get_item (pamh, PAM_CONV, (const void **) &conv);
 	
-	/* obtain existing authenticated token */
-	retval = pam_get_item (pamh, PAM_AUTHTOK, (const void **) &otp);
 	if (retval != PAM_SUCCESS)
-    {
-#ifdef DEBUG
-		if (debug)
-			D (("get otp returned error: %s", pam_strerror (pamh, retval)));
-#endif
-		goto done;
-    }
-
-#ifdef DEBUG
-	if (debug)
-		D (("get otp returned: %s", otp));
-#endif
-
-	if (otp == NULL)
 	{
-		retval = pam_get_item (pamh, PAM_CONV, (const void **) &conv);
-		if (retval != PAM_SUCCESS)
-		{
 #ifdef DEBUG
-			if (debug)
-				D (("get conv returned error: %s", pam_strerror (pamh, retval)));
+		D (("get conv returned error: %s", pam_strerror (pamh, retval)));
 #endif
-			goto done;
-		}
+		return retval;
+	}
 
-		pmsg[0] = &msg[0];
-		asprintf ((char **) &msg[0].msg, "Yubikey OTP for '%s': ", user);
-		
-		if (silent_otp)
-			msg[0].msg_style = PAM_PROMPT_ECHO_OFF;
-		else
-			msg[0].msg_style = PAM_PROMPT_ECHO_ON;
+	pmsg[0] = &msg[0];
+#ifdef DEBUG
+	asprintf ((char **) &msg[0].msg, "DEBUG MODE!!! Yubikey OTP: ");
+#else
+	asprintf ((char **) &msg[0].msg, "Yubikey OTP: ");
+#endif
 
-		resp = NULL;
+	if (silent_otp)
+		msg[0].msg_style = PAM_PROMPT_ECHO_OFF;
+	else
+		msg[0].msg_style = PAM_PROMPT_ECHO_ON;
 
-		retval = conv->conv (nargs, (const struct pam_message **) pmsg,
+	resp = NULL;
+	retval = conv->conv (nargs, (const struct pam_message **) pmsg,
 			   &resp, conv->appdata_ptr);
 
-		free ((char *) msg[0].msg);
+	free ((char *) msg[0].msg);
 
-		if (retval != PAM_SUCCESS)
-		{
+	if (retval != PAM_SUCCESS)
+	{
 #ifdef DEBUG
-			if (debug)
-				D (("conv returned error: %s", pam_strerror (pamh, retval)));
+		D (("conv returned error: %s", pam_strerror (pamh, retval)));
 #endif
-			goto done;
-		}
+		return retval;
+	}
 
 #ifdef DEBUG
-		if (debug)
-			D (("conv returned: %s", resp->resp));
+	D (("conv returned: %s", resp->resp));
 #endif
 
-		otp = resp->resp;
+	otp = resp->resp;
 
-		retval = pam_set_item(pamh, PAM_AUTHTOK, otp);
+	retval = pam_set_item(pamh, PAM_AUTHTOK, otp);
       
-		if (retval != PAM_SUCCESS)
-		{
+	if (retval != PAM_SUCCESS)
+	{
 #ifdef DEBUG
-			if (debug)
-				D (("set_item returned error: %s", pam_strerror (pamh, retval)));
+		D (("set_item returned error: %s", pam_strerror (pamh, retval)));
 #endif
-			goto done;
-		}
-    }
-
+		return retval;
+	}
+    
     /* set additional default values for the entry after parsing */
 	getSHA256(user, strlen(user), (uint8_t *)&entry.user_hash);
 	 
@@ -210,20 +185,17 @@ pam_sm_authenticate (pam_handle_t * pamh,
     parseOTP(&tkt, public_uid_bin, &public_uid_bin_size, otp, NULL);
 	 
 #ifdef DEBUG
-	if (debug)
-		D (("Parsing OTP"));
+	D (("Parsing OTP"));
 #endif
 
     /* OTP needs the public UID for lookup */
     if (public_uid_bin_size <= 0)
 	{
 #ifdef DEBUG
-		if (debug)
-			D (("public_uid has no length, OTP is invalid"));
+		D (("public_uid has no length, OTP is invalid"));
 #endif
 
-		retval = PAM_CRED_INSUFFICIENT;
-		goto done;
+		return PAM_CRED_INSUFFICIENT;
 	}
 
     /* set additional default values for the entry after parsing */
@@ -234,12 +206,10 @@ pam_sm_authenticate (pam_handle_t * pamh,
     if (handle == NULL)
 	{
 #ifdef DEBUG
-		if (debug)
-			D (("couldn't access database: %s", CONFIG_AUTH_DB_DEFAULT));
+		D (("couldn't access database: %s", CONFIG_AUTH_DB_DEFAULT));
 #endif
 
-		retval = PAM_AUTHINFO_UNAVAIL;
-		goto done;
+		return PAM_AUTHINFO_UNAVAIL;
 	}
 	
     /* seek to public UID if it exists */
@@ -247,21 +217,18 @@ pam_sm_authenticate (pam_handle_t * pamh,
     {
         ykdbDatabaseClose(handle);
 #ifdef DEBUG
-		if (debug)
-			D (("no entry for user: %s", user));
+		D (("no entry for user: %s", user));
 #endif
 
-		retval = PAM_USER_UNKNOWN;
-		goto done;
+		return PAM_USER_UNKNOWN;
     }
 
-	/* grab the found entry */
+	/* grab the entry */
 	if ( ykdbEntryGet(handle, &entry) != YKDB_SUCCESS )
 	{
 	    ykdbDatabaseClose(handle);
 
-		retval = PAM_AUTHINFO_UNAVAIL;
-		goto done;
+		return PAM_AUTHINFO_UNAVAIL;
 	}
 	 
 	/* start building decryption entry as required */
@@ -312,12 +279,10 @@ pam_sm_authenticate (pam_handle_t * pamh,
     {
         ykdbDatabaseClose(handle);
 #ifdef DEBUG
-		if (debug)
-			D (("crc invalid: 0x%04x", crc));
+		D (("crc invalid: 0x%04x", crc));
 #endif
 
-		retval = PAM_AUTH_ERR;
-		goto done;
+		return PAM_AUTH_ERR;
     }
 
     /* hash decrypted private uid */
@@ -328,12 +293,10 @@ pam_sm_authenticate (pam_handle_t * pamh,
     {
         ykdbDatabaseClose(handle);
 #ifdef DEBUG
-		if (debug)
-			D (("private uid mismatch"));
+		D (("private uid mismatch"));
 #endif
 
-		retval = PAM_AUTH_ERR;
-		goto done;
+		return PAM_AUTH_ERR;
     }
 
 	/* check counter deltas */
@@ -344,24 +307,20 @@ pam_sm_authenticate (pam_handle_t * pamh,
 	{
 		ykdbDatabaseClose(handle);
 #ifdef DEBUG
-		if (debug)
-			D (("OTP is INVALID. Possible replay!!!"));
+		D (("OTP is INVALID. Possible replay!!!"));
 #endif
 
-		retval = PAM_AUTH_ERR;
-		goto done;
+		return PAM_AUTH_ERR;
 	}
 	
 	if ( delta_use == 0 && delta_session <= 0 )
 	{
 		ykdbDatabaseClose(handle);
 #ifdef DEBUG
-		if (debug)
-			D (("OTP is INVALID. Possible replay!!!"));
+		D (("OTP is INVALID. Possible replay!!!"));
 #endif
 
-		retval = PAM_AUTH_ERR;
-		goto done;
+		return PAM_AUTH_ERR;
 	}
 	
 	/* update the database entry with the latest counters */
@@ -381,120 +340,30 @@ pam_sm_authenticate (pam_handle_t * pamh,
 	if ( ykdbEntryWrite(handle, &entry) != YKDB_SUCCESS )
 	{
 		ykdbDatabaseClose(handle);
-		retval = PAM_AUTHINFO_UNAVAIL;
-		goto done;
+		return PAM_AUTHINFO_UNAVAIL;
 	}
 
-	retval = PAM_SUCCESS;
-
-done:
-	pam_set_data (pamh, "yubikey_setcred_return", (void *) retval, NULL);
-
-#ifdef DEBUG
-	if (debug)
-		D (("done. [%s]", pam_strerror (pamh, retval)));
-#endif
-
-	return retval;
+	return PAM_SUCCESS;
 }
 
 PAM_EXTERN int
 pam_sm_setcred (pam_handle_t * pamh, int flags, int argc, const char **argv)
 {
-	int retval;
-	int auth_retval;
-
-	D (("called."));
-
-  /* TODO: ? */
-
-  retval = pam_get_data (pamh, "yubikey_setcred_return",
-			 (const void **) &auth_retval);
-
-  if (retval != PAM_SUCCESS)
-    return PAM_CRED_UNAVAIL;
-
-  switch (auth_retval)
-    {
-    case PAM_SUCCESS:
-      retval = PAM_SUCCESS;
-      break;
-
-    case PAM_USER_UNKNOWN:
-      retval = PAM_USER_UNKNOWN;
-      break;
-
-    case PAM_AUTH_ERR:
-    default:
-      retval = PAM_CRED_ERR;
-      break;
-    }
-
-  D (("done. [%s]", pam_strerror (pamh, retval)));
-
-  return retval;
-}
-
-PAM_EXTERN int
-pam_sm_acct_mgmt (pam_handle_t * pamh, int flags, int argc, const char **argv)
-{
-  int retval;
-
-  D (("called."));
-
-  /* TODO: ? */
-  retval = PAM_SUCCESS;
-
-  D (("done. [%s]", pam_strerror (pamh, retval)));
-
-  return retval;
+	return PAM_SUCCESS;
 }
 
 PAM_EXTERN int
 pam_sm_open_session (pam_handle_t * pamh,
 		     int flags, int argc, const char **argv)
 {
-  int retval;
-
-  D (("called."));
-
-  /* TODO: ? */
-  retval = PAM_SUCCESS;
-
-  D (("done. [%s]", pam_strerror (pamh, retval)));
-
-  return retval;
+	return PAM_SUCCESS;
 }
 
 PAM_EXTERN int
 pam_sm_close_session (pam_handle_t * pamh,
 		      int flags, int argc, const char **argv)
 {
-  int retval;
-
-  D (("called."));
-
-  /* TODO: ? */
-  retval = PAM_SUCCESS;
-
-  D (("done. [%s]", pam_strerror (pamh, retval)));
-
-  return retval;
-}
-
-PAM_EXTERN int
-pam_sm_chauthtok (pam_handle_t * pamh, int flags, int argc, const char **argv)
-{
-  int retval;
-
-  D (("called."));
-
-  /* TODO: ? */
-  retval = PAM_SUCCESS;
-
-  D (("done. [%s]", pam_strerror (pamh, retval)));
-
-  return retval;
+	return PAM_SUCCESS;
 }
 
 #ifdef PAM_STATIC
@@ -503,10 +372,10 @@ struct pam_module _pam_yubikey_modstruct = {
   "pam_yubikey",
   pam_sm_authenticate,
   pam_sm_setcred,
-  pam_sm_acct_mgmt,
+  NULL,
   pam_sm_open_session,
   pam_sm_close_session,
-  pam_sm_chauthtok
+  NULL
 };
 
 #endif

@@ -247,6 +247,41 @@ int checkModHexString(const uint8_t *src)
 
 
 /*
+** checkOTPCompliance
+**
+** Description:
+**   Identifies whether the string is compliant with the length and character
+** set.
+**
+** Arguments:
+**   const uint8_t *otp			source containing modhex characters
+**   uint8_t min_pub_uid_len  	minimum length of the public_uid (fixed portion)
+**
+** Return
+**   0 if source is compliant, non-zero otherwise.
+*/
+int checkOTPCompliance(const uint8_t *otp, uint32_t min_pub_uid_len)
+{
+	uint32_t			otp_size;
+	
+	/* check if OTP exists */
+	if ( otp == NULL )
+		return -1;
+
+	otp_size = strlen(otp);
+
+	/* check length */
+	if ( otp_size < (min_pub_uid_len + 32) )
+		return -2;
+
+	/* check modhex character set */
+	if ( checkModHexString(otp) )
+		return -3;
+
+	return 0;
+}
+
+/*
 ** hexDecode
 **
 ** Description:

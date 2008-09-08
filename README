@@ -39,14 +39,8 @@ and ensure pam_yubico.so is located in /lib/security/
 
 Supported PAM module parameters are:
 
-  "debug":		to enable debug output to stdout,
-  "silent_otp": enable echoing of the OTP as it is printed out.
+  "silent_otp": disable echoing of the OTP as it is printed out.
 
-If you are using "debug" you may find it useful to create a world-writable log
-file in var run.
-
-# touch /var/run/pam-debug.log 
-# chmod go+w /var/run/pam-debug.log 
 
 -------------------------------------------------------------------------------
 4. Utilities
@@ -86,3 +80,28 @@ ykvalidate
 Once a Yubikey has been successfully added to the YubiPAM database, it can be
 tested using the ykvalidate tool. Simply pass the user name and an OTP from
 the Yubikey associated with that name it will confirm if it's VALID or NOT.
+
+
+-------------------------------------------------------------------------------
+5. Troubleshooting
+-------------------------------------------------------------------------------
+
+In the event that the YubiPAM module is not working it may pay to enable debug
+mode in order to sort out any issues. To enable debug mode you must reconfigure
+the project with the --enable-debug option, for example:
+
+# ./configure --enable-debug
+
+Move the newly generated pam_yubikey.so file to /lib/security, or on a 64-bit
+machine to /lib64/security. You'll also have to touch and give appropriate
+permissions to the debug output file using:
+
+# touch /var/run/pam-debug.log 
+# chmod go+w /var/run/pam-debug.log 
+
+Note: On production systems, debug should NOT be turned on due to its verbosity
+and subsequent disclosure of information. As a friendly reminder, the prompt
+will indicate that you are in debug mode by indicating "DEBUG MODE!!!". Once 
+you've successfully debugged your system reconfigure without the --enable-debug
+option and rebuild.
+

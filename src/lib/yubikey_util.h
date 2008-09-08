@@ -45,6 +45,7 @@ int safeStrnlen(const char *buf, int buf_size);
 
 int checkHexString(const uint8_t *);
 int checkModHexString(const uint8_t *);
+int checkOTPCompliance(const uint8_t *, uint32_t);
 
 /* cipher/ routines */
 void aesEncryptBlock(uint8_t *, const uint8_t *);
