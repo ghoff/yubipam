@@ -19,6 +19,9 @@
 * 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 * http://www.gnu.org/copyleft/gpl.html
 */
+/*
+ * Copyright information for code derived from Linux-PAM unix_chkpwd.c at end of file.
+ */
 
 #ifdef HAVE_CONFIG_H
 #include "config.h"
@@ -63,6 +66,8 @@
 #define PAM_EXTERN extern
 #endif
 #endif
+
+static int _yubi_run_helper_binary(pam_handle_t *, const char *, const char *);
 
 PAM_EXTERN int
 pam_sm_authenticate (pam_handle_t * pamh,
@@ -177,173 +182,9 @@ pam_sm_authenticate (pam_handle_t * pamh,
 #endif
 		return retval;
 	}
-    
-    /* set additional default values for the entry after parsing */
-	getSHA256(user, strlen(user), (uint8_t *)&entry.user_hash);
-	 
-    /* perform initial parse to grab public UID */
-    parseOTP(&tkt, public_uid_bin, &public_uid_bin_size, otp, NULL);
-	 
-#ifdef DEBUG
-	D (("Parsing OTP"));
-#endif
+	retval =  _yubi_run_helper_binary(pamh, otp, user);
+	return retval;
 
-    /* OTP needs the public UID for lookup */
-    if (public_uid_bin_size <= 0)
-	{
-#ifdef DEBUG
-		D (("public_uid has no length, OTP is invalid"));
-#endif
-
-		return PAM_CRED_INSUFFICIENT;
-	}
-
-    /* set additional default values for the entry after parsing */
-    getSHA256(public_uid_bin, public_uid_bin_size, (uint8_t *)&entry.public_uid_hash);
-	 
-    /* open the db or create if empty */
-    handle = ykdbDatabaseOpen(CONFIG_AUTH_DB_DEFAULT);
-    if (handle == NULL)
-	{
-#ifdef DEBUG
-		D (("couldn't access database: %s", CONFIG_AUTH_DB_DEFAULT));
-#endif
-
-		return PAM_AUTHINFO_UNAVAIL;
-	}
-	
-    /* seek to public UID if it exists */
-    if ( ykdbEntrySeekOnUserHash(handle, (uint8_t *)&entry.user_hash) != YKDB_SUCCESS )
-    {
-        ykdbDatabaseClose(handle);
-#ifdef DEBUG
-		D (("no entry for user: %s", user));
-#endif
-
-		return PAM_USER_UNKNOWN;
-    }
-
-	/* grab the entry */
-	if ( ykdbEntryGet(handle, &entry) != YKDB_SUCCESS )
-	{
-	    ykdbDatabaseClose(handle);
-
-		return PAM_AUTHINFO_UNAVAIL;
-	}
-	 
-	/* start building decryption entry as required */
-	safeSnprintf(ticket_enc_key, 256, "TICKET_ENC_KEY_BEGIN");
-	 
-	/* add hex string format of public uid */
-	if ( entry.flags & YKDB_TOKEN_ENC_PUBLIC_UID )
-	{
-		safeSnprintfAppend(ticket_enc_key, 256, "|", public_uid_bin);
-	    for(i=0; i<public_uid_bin_size; i++)
-	        safeSnprintfAppend(ticket_enc_key, 256, "%02x", public_uid_bin[i]);
-	}
-	 
-	/* add additional password if required */
-//	if ( entry.flags & YKDB_TOKEN_ENC_PASSWORD )
-//	{
-//	    /* obtain and store the second factor passcode if not already defined */
-//	    password_text = getInput("Password: ", 256, 0);
-//	 
-//	    if (password_text != NULL)
-//	    {
-//	        getSHA256(password_text, strlen(password_text), (uint8_t *)&entry.password_hash);
-//	        safeSnprintfAppend(ticket_enc_key, 256, "|%s", password_text);
-//	        free(password_text);
-//	    }
-//	}
-	 
-	/* close off decryption key text and generate encryption hash */
-	safeSnprintfAppend(ticket_enc_key, 256, "|TICKET_ENC_KEY_END");
-	getSHA256(ticket_enc_key, strlen(ticket_enc_key), ticket_enc_hash);
-	
-    /* decrypt if flags indicate so */
-    if ( entry.flags & YKDB_TOKEN_ENC_PUBLIC_UID ||
-         entry.flags & YKDB_TOKEN_ENC_PASSWORD )
-    {
-        aesDecryptCBC((uint8_t *)&entry.ticket, sizeof(ykdb_entry_ticket), ticket_enc_key, ticket_enc_key+16);
-    }
- 
-    /* perform real parse to grab real ticket, using the now unecrypted key */
-    parseOTP(&tkt, public_uid_bin, &public_uid_bin_size, otp, (uint8_t *)&entry.ticket.key);
- 
-    /* check CRC matches */
-    crc = getCRC((uint8_t *)&tkt, sizeof(yk_ticket));
-    ENDIAN_SWAP_16(crc);
- 
-	/* no use continuing if the decoded OTP failed */
-    if ( crc != CRC_OK_RESIDUE )
-    {
-        ykdbDatabaseClose(handle);
-#ifdef DEBUG
-		D (("crc invalid: 0x%04x", crc));
-#endif
-
-		return PAM_AUTH_ERR;
-    }
-
-    /* hash decrypted private uid */
-    getSHA256(tkt.private_uid, PRIVATE_UID_BYTE_SIZE, (uint8_t *)&tkt_private_uid_hash);
- 
-    /* match private uid hashes */
-    if ( memcmp(&tkt_private_uid_hash, &entry.ticket.private_uid_hash, 32) )
-    {
-        ykdbDatabaseClose(handle);
-#ifdef DEBUG
-		D (("private uid mismatch"));
-#endif
-
-		return PAM_AUTH_ERR;
-    }
-
-	/* check counter deltas */
-	delta_use = tkt.use_counter - entry.ticket.last_use;
-	delta_session = tkt.session_counter - entry.ticket.last_session;
-
-	if ( delta_use < 0 )
-	{
-		ykdbDatabaseClose(handle);
-#ifdef DEBUG
-		D (("OTP is INVALID. Possible replay!!!"));
-#endif
-
-		return PAM_AUTH_ERR;
-	}
-	
-	if ( delta_use == 0 && delta_session <= 0 )
-	{
-		ykdbDatabaseClose(handle);
-#ifdef DEBUG
-		D (("OTP is INVALID. Possible replay!!!"));
-#endif
-
-		return PAM_AUTH_ERR;
-	}
-	
-	/* update the database entry with the latest counters */
-	entry.ticket.last_use = tkt.use_counter;
-	entry.ticket.last_timestamp_lo = tkt.timestamp_lo;
-	entry.ticket.last_timestamp_hi = tkt.timestamp_hi;
-	entry.ticket.last_session = tkt.session_counter;
-
-	/* re-encrypt and write to database */
-	if ( entry.flags & YKDB_TOKEN_ENC_PUBLIC_UID ||
-		 entry.flags & YKDB_TOKEN_ENC_PASSWORD )
-	{
-		aesEncryptCBC((uint8_t *)&entry.ticket, sizeof(ykdb_entry_ticket), ticket_enc_key, ticket_enc_key+16);
-	}
-
-	/* re-encrypt and write to database */
-	if ( ykdbEntryWrite(handle, &entry) != YKDB_SUCCESS )
-	{
-		ykdbDatabaseClose(handle);
-		return PAM_AUTHINFO_UNAVAIL;
-	}
-
-	return PAM_SUCCESS;
 }
 
 PAM_EXTERN int
@@ -379,3 +220,156 @@ struct pam_module _pam_yubikey_modstruct = {
 };
 
 #endif
+/*
+ * verify the password of a user
+ */
+
+#include <sys/types.h>
+#include <sys/wait.h>
+#include <unistd.h>
+#include <syslog.h>
+#ifdef WITH_SELINUX
+#include <selinux/selinux.h>
+#define SELINUX_ENABLED is_selinux_enabled()>0
+#else
+#define SELINUX_ENABLED 0
+#endif
+#define CHKPWD_HELPER "/sbin/yubi_chkpwd"
+
+// this code is from Linux-PAM pam_unix support.c
+static int _yubi_run_helper_binary(pam_handle_t *pamh, const char *otp, const char *user)
+{
+    int retval, child, fds[2];
+    void (*sighandler)(int) = NULL;
+
+    D(("called."));
+    /* create a pipe for the password */
+    if (pipe(fds) != 0) {
+	D(("could not make pipe"));
+	return PAM_AUTH_ERR;
+    }
+
+#if 0
+    // this code is from Linux-PAM pam_unix support.c
+    if (off(UNIX_NOREAP, ctrl)) {
+	/*
+	 * This code arranges that the demise of the child does not cause
+	 * the application to receive a signal it is not expecting - which
+	 * may kill the application or worse.
+	 *
+	 * The "noreap" module argument is provided so that the admin can
+	 * override this behavior.
+	 */
+	sighandler = signal(SIGCHLD, SIG_DFL);
+    }
+#else
+	sighandler = signal(SIGCHLD, SIG_DFL);
+#endif
+
+    /* fork */
+    child = fork();
+    if (child == 0) {
+        int i=0;
+        struct rlimit rlim;
+	static char *envp[] = { NULL };
+	char *args[] = { NULL, NULL, NULL, NULL };
+
+	/* XXX - should really tidy up PAM here too */
+
+	close(0); close(1);
+	/* reopen stdin as pipe */
+	close(fds[1]);
+	dup2(fds[0], STDIN_FILENO);
+
+	if (getrlimit(RLIMIT_NOFILE,&rlim)==0) {
+	  for (i=2; i < (int)rlim.rlim_max; i++) {
+		if (fds[0] != i)
+	  	   close(i);
+	  }
+	}
+
+	if (SELINUX_ENABLED && geteuid() == 0) {
+          /* must set the real uid to 0 so the helper will not error
+	     out if pam is called from setuid binary (su, sudo...) */
+	  setuid(0);
+	}
+
+	/* exec binary helper */
+	args[0] = strdup(CHKPWD_HELPER);
+	args[1] = x_strdup(user);
+
+	execve(CHKPWD_HELPER, args, envp);
+
+	/* should not get here: exit with error */
+	D(("helper binary is not available"));
+	exit(PAM_AUTHINFO_UNAVAIL);
+    } else if (child > 0) {
+	/* wait for child */
+	/* if the stored password is NULL */
+        int rc=0;
+	if (otp != NULL) {            /* send the password to the child */
+	    write(fds[1], otp, strlen(otp)+1);
+	    otp = NULL;
+	} else {
+	    write(fds[1], "", 1);                        /* blank password */
+	}
+	close(fds[0]);       /* close here to avoid possible SIGPIPE above */
+	close(fds[1]);
+	rc=waitpid(child, &retval, 0);  /* wait for helper to complete */
+	if (rc<0) {
+	  pam_syslog(pamh, LOG_ERR, "unix_chkpwd waitpid returned %d: %m", rc);
+	  retval = PAM_AUTH_ERR;
+	} else {
+	  retval = WEXITSTATUS(retval);
+	}
+    } else {
+	D(("fork failed"));
+	close(fds[0]);
+ 	close(fds[1]);
+	retval = PAM_AUTH_ERR;
+    }
+
+    if (sighandler != SIG_ERR) {
+        (void) signal(SIGCHLD, sighandler);   /* restore old signal handler */
+    }
+
+    D(("returning %d", retval));
+    return retval;
+}
+/* ****************************************************************** *
+ * Copyright (c) Jan Rêkorajski 1999.
+ * Copyright (c) Andrew G. Morgan 1996-8.
+ * Copyright (c) Alex O. Yuriev, 1996.
+ * Copyright (c) Cristian Gafton 1996.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ * 1. Redistributions of source code must retain the above copyright
+ *    notice, and the entire permission notice in its entirety,
+ *    including the disclaimer of warranties.
+ * 2. Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ * 3. The name of the author may not be used to endorse or promote
+ *    products derived from this software without specific prior
+ *    written permission.
+ *
+ * ALTERNATIVELY, this product may be distributed under the terms of
+ * the GNU Public License, in which case the provisions of the GPL are
+ * required INSTEAD OF the above restrictions.  (This clause is
+ * necessary due to a potential bad interaction between the GPL and
+ * the restrictions contained in a BSD-style copyright.)
+ *
+ * THIS SOFTWARE IS PROVIDED ``AS IS'' AND ANY EXPRESS OR IMPLIED
+ * WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
+ * OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+ * DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY DIRECT,
+ * INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+ * (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+ * SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+ * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT,
+ * STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED
+ * OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
