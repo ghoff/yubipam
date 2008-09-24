@@ -1,4 +1,11 @@
-2008-09-26 - YubiPAM 1.0.3
+2008-09-26 - YubiPAM 1.0.4
+  [*] Improvements
+      * PAM. A small bug crept in with the introduction of yk_chkpwd. Use of
+        the pam_syslog function is apparently privvy to more recent systems.
+        The appropriate checks are now in place. - thanks Brian Gorka
+
+
+2008-09-24 - YubiPAM 1.0.3
   [*] Improvements
       * yk_chkpwd. A new binary has been added to ensure complete usability
         for all users. It was discovered that certain applications, such as

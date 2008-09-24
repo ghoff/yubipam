@@ -2,7 +2,7 @@
 # Process this file with autoconf to produce a configure script.
 AC_PREREQ(2.61)
 AC_INIT(src/pam_yubikey.c)
-AM_INIT_AUTOMAKE(YubiPAM, 1.0.3)
+AM_INIT_AUTOMAKE(YubiPAM, 1.0.4)
 AC_CONFIG_HEADER(config.h)
 
 # Checks for programs.
@@ -53,21 +53,32 @@ AC_ARG_WITH(authdb,
 # Checks for libraries.
 AC_CHECK_LIB([pam], [pam_start],
 			 [], 
-			 [AC_MSG_ERROR( [You don't seem to have installed the PAM development package] )]
+			 [AC_MSG_ERROR( [You don't seem to have the PAM development package installed] )]
 )
 
 # Checks for header files.
 AC_HEADER_STDC
-AC_CHECK_HEADERS([stdlib.h string.h syslog.h unistd.h wchar.h security/pam_appl.h security/pam_modules.h security/_pam_macros.h])
+AC_HEADER_SYS_WAIT
+AC_CHECK_HEADERS([fcntl.h stdint.h stdlib.h string.h syslog.h unistd.h wchar.h security/pam_appl.h security/pam_modules.h security/_pam_macros.h security/pam_ext.h])
 
 # Checks for typedefs, structures, and compiler characteristics.
 AC_C_CONST
-AC_TYPE_UINT32_T
+AC_TYPE_OFF_T
+AC_TYPE_SIZE_T
+AC_TYPE_UID_T
 AC_TYPE_UINT8_T
+AC_TYPE_UINT16_T
+AC_TYPE_UINT32_T
+
 
 # Checks for library functions.
+AC_CHECK_FUNCS([dup2 memset strchr strdup])
+
+# Checks for library functions.
+AC_FUNC_FORK
 AC_FUNC_MALLOC
 AC_FUNC_MEMCMP
+AC_TYPE_SIGNAL
 AC_FUNC_VPRINTF
 AC_CHECK_FUNCS([memset strchr strtol])
 AC_CONFIG_FILES([Makefile

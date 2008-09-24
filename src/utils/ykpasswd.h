@@ -32,8 +32,8 @@
 
 #define VER_MAJOR			"1"
 #define VER_MINOR			"0"
-#define VER_REVISION		"3"
-#define VER_BUILD			"75"
+#define VER_REVISION		"4"
+#define VER_BUILD			"76"
 
 #define TF_TAB_1			10
 #define TF_TAB_2			11

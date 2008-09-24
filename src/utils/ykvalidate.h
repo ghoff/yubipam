@@ -26,8 +26,8 @@
 
 #define VER_MAJOR			"1"
 #define VER_MINOR			"0"
-#define VER_REVISION		"3"
-#define VER_BUILD			"75"
+#define VER_REVISION		"4"
+#define VER_BUILD			"76"
 
 #define MODE_VERSION		1
 #define MODE_USAGE			2

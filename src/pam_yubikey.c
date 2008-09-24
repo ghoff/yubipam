@@ -238,12 +238,14 @@ struct pam_module _pam_yubikey_modstruct = {
 #include <sys/wait.h>
 #include <unistd.h>
 #include <syslog.h>
+
 #ifdef WITH_SELINUX
 #include <selinux/selinux.h>
 #define SELINUX_ENABLED is_selinux_enabled()>0
 #else
 #define SELINUX_ENABLED 0
 #endif
+
 #define CHKPWD_HELPER "/sbin/yk_chkpwd"
 
 // this code is from Linux-PAM pam_unix support.c
@@ -346,7 +348,9 @@ static int _yubi_run_helper_binary(pam_handle_t *pamh, const char *otp, const ch
 
 		if (rc < 0)
 		{
+#ifdef HAVE_SECURITY_PAM_EXT_H
 			pam_syslog(pamh, LOG_ERR, "yk_chkpwd waitpid returned %d: %m", rc);
+#endif
 			D(("yk_chkpwd waitpid returned %d: %m", rc));
 			retval = PAM_AUTH_ERR;
 		}
