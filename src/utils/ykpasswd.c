@@ -196,6 +196,8 @@ int main (int argc, char *argv[])
 	/* close the db */
 	ykdbDatabaseClose(handle);
 
+	fprintf(stdout, "Completed successfully.\n");
+
 	cleanExit(0);
 }
 
@@ -249,12 +251,11 @@ int showUsage(char *program_name)
 	fprintf(stdout, "   -?          Show this information\n");
     fprintf(stdout, "   -a          Add yubikey to database\n");
     fprintf(stdout, "   -d          Delete yubikey from database\n");
-//    fprintf(stdout, "   -c          Prompt for second factor pass code\n");
-    fprintf(stdout, "   -f <uid>    Public uid in hex\n");
+//    fprintf(stdout, "   -C          Prompt for second factor pass code\n");
+    fprintf(stdout, "   -f <uid>    Fixed (Public) UID in hex\n");
     fprintf(stdout, "   -k <key>    AES key in hex\n");
     fprintf(stdout, "   -o <otp>    Yubikey generated OTP\n");
-    fprintf(stdout, "   -p <uid>    Private uid in hex\n");
-    fprintf(stdout, "   -u <user>   Alternative method for indicating user\n");
+    fprintf(stdout, "   -p <uid>    Private UID in hex\n");
 //    fprintf(stdout, "   -s          Sync to yubikey dongle\n");
     fprintf(stdout, "   -V          Show version and exit\n");
 	fprintf(stdout, "\n");
@@ -263,6 +264,7 @@ int showUsage(char *program_name)
 //    fprintf(stdout, "   -P <uid>    Force new private uid in hex\n");
 //	fprintf(stdout, "\n");
     fprintf(stdout, "Longname options and their corresponding single char version\n");
+    fprintf(stdout, "   --user <user>   Alternative method for indicating <user>\n");
 //    fprintf(stdout, "   --tab1          Prepend a tab character to the public uid\n");
 //    fprintf(stdout, "   --tab2          Append a tab character to the public uid\n");
 //    fprintf(stdout, "   --tab3          Append a tab character to the encrypted ticket\n");
@@ -289,7 +291,7 @@ int showVersion(void)
     fprintf(stderr, "\n"
    					"ykpasswd - Yubikey Password Utility\n"
 			        "Version %s.%s.%s (Build %s)\n"
-			        "By the SXL.com team: http://www.securixlive.com/contact.html\n"
+			        "By the SecurixLive team: http://www.securixlive.com/contact.html\n"
 					"\n", VER_MAJOR, VER_MINOR, VER_REVISION, VER_BUILD); 
 
 	return 0;
@@ -313,6 +315,7 @@ static struct option long_options[] = {
    {"pacing10", LONGOPT_ARG_NONE, NULL, CF_PACING_10},
    {"pacing20", LONGOPT_ARG_NONE, NULL, CF_PACING_20},
    {"static", LONGOPT_ARG_NONE, NULL, CF_STATIC},
+   {"user", LONGOPT_ARG_REQUIRED, NULL, OPT_USER},
    {"version", LONGOPT_ARG_NONE, NULL, 'V'},
    {"help", LONGOPT_ARG_NONE, NULL, '?'},
    {0, 0, 0, 0}
@@ -343,7 +346,11 @@ int parseCommandLine(int argc, char *argv[])
         {
             case CF_STATIC:
                 break;
-            
+
+			case OPT_USER: /* Explicitly defined user */
+				user_text = strdup(optarg);
+				break;
+
             case '?': /* show help and exit with 1 */
 				mode = MODE_USAGE;
 				break;
@@ -379,18 +386,18 @@ int parseCommandLine(int argc, char *argv[])
 			case 'p': /* Private UID */
 				private_uid_text = strdup(optarg);
 				break;
-
-			case 'u': /* Private UID */
-				user_text = strdup(optarg);
-				break;
 		}	
 	}
 	
-	/* there should be at least one left over argument */
-	if (optind < argc && user_text != NULL)
+	/* there may be some left over arguments */
+	if (optind < argc)
 	{
-		/* grab the first additional argument as the user name */
-		user_text = strdup(argv[optind]);
+		/* an explicit declaration overrides this */
+		if (user_text == NULL)
+		{
+			/* grab the first additional argument as the user name */
+			user_text = strdup(argv[optind]);
+		}
 	}
 }
 
@@ -597,11 +604,10 @@ int updateYubikeyEntry(void)
 			safeSnprintfAppend(ticket_enc_key, 256, "%02x", public_uid_bin[i]);
 	}
 	
-	
 	if ( tmp_entry.flags & YKDB_TOKEN_ENC_PASSWORD )
 	{
 		/* obtain and store the second factor passcode if not already defined */
-		password_text = getInput("Password: ", 256, 0);
+		password_text = getInput("Yubikey passcode: ", 256, 0);
 		
 		if (password_text != NULL)
 		{
@@ -664,7 +670,9 @@ int deleteYubikeyEntry(void)
 	getSHA256(ticket_enc_key, strlen(ticket_enc_key), ticket_enc_hash);
 	aesDecryptCBC((uint8_t *)&tmp_entry.ticket, sizeof(ykdb_entry_ticket), ticket_enc_key, ticket_enc_key+16);
 
+#ifdef DEBUG
 	ykdbPrintEntry(&tmp_entry);
+#endif
 
 	if ( ykdbEntryDelete(handle) != YKDB_SUCCESS )
 	{

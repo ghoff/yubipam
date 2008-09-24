@@ -26,8 +26,11 @@
 
 #define VER_MAJOR			"1"
 #define VER_MINOR			"0"
-#define VER_REVISION		"1"
-#define VER_BUILD			"55"
+#define VER_REVISION		"3"
+#define VER_BUILD			"75"
 
+#define MODE_VERSION		1
+#define MODE_USAGE			2
+#define MODE_VALIDATE		3
 
 #endif /* __YK_PASSWD_H__*/ 

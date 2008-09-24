@@ -32,8 +32,8 @@
 
 #define VER_MAJOR			"1"
 #define VER_MINOR			"0"
-#define VER_REVISION		"1"
-#define VER_BUILD			"55"
+#define VER_REVISION		"3"
+#define VER_BUILD			"75"
 
 #define TF_TAB_1			10
 #define TF_TAB_2			11
@@ -47,7 +47,7 @@
 #define CF_PACING_20		19
 #define CF_STATIC			20
 
-
+#define OPT_USER			1000
 
 
 #endif /* __YK_PASSWD_H__*/ 

@@ -2,7 +2,7 @@
 # Process this file with autoconf to produce a configure script.
 AC_PREREQ(2.61)
 AC_INIT(src/pam_yubikey.c)
-AM_INIT_AUTOMAKE(pam_yubikey, 1.0.2)
+AM_INIT_AUTOMAKE(YubiPAM, 1.0.3)
 AC_CONFIG_HEADER(config.h)
 
 # Checks for programs.

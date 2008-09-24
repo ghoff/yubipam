@@ -35,11 +35,11 @@ director /etc/pam.d/:
 
   auth sufficient pam_yubikey.so
 
-and ensure pam_yubico.so is located in /lib/security/
+and ensure pam_yubikey.so is located in /lib/security/
 
 Supported PAM module parameters are:
 
-  "silent_otp": disable echoing of the OTP as it is printed out.
+  "verbose_otp": enable echoing of the OTP, after all it's only a one time pad.
 
 
 -------------------------------------------------------------------------------
@@ -68,7 +68,7 @@ If you don't have the private UID it requires you to decrypt a valid token to
 get the value. Fortunately you can provide a valid OTP and the appropriate AES
 key and let ykpassword determine the public and private UIDs for you, using:
 
-# ykpassword -a -u joesmith -k AESKEY -o OTP
+# ykpasswd -a -u joesmith -k AESKEY -o OTP
 
 The "-u" option is an alternative to placing the user name at the end of the
 utility which can be cumbersome if you use the Yubikey to generate an OTP and
@@ -78,8 +78,13 @@ a carriage return is applied too early :)
 ykvalidate
 
 Once a Yubikey has been successfully added to the YubiPAM database, it can be
-tested using the ykvalidate tool. Simply pass the user name and an OTP from
-the Yubikey associated with that name it will confirm if it's VALID or NOT.
+tested using the ykvalidate tool. Simply pass an OTP associated with the
+calling user or specify the actual user and it will confirm if it's VALID or
+NOT.
+
+# ykvalidate OTP
+
+# ykvalidate -u joesmith OTP
 
 
 -------------------------------------------------------------------------------

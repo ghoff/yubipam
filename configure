@@ -2241,8 +2241,8 @@ fi
 
 
 # Define the identity of the package.
- PACKAGE=pam_yubikey
- VERSION=1.0.2
+ PACKAGE=YubiPAM
+ VERSION=1.0.3
 
 
 cat >>confdefs.h <<_ACEOF
